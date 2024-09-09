@@ -1,0 +1,25 @@
+syntax = "proto3";
+option go_package = "github.com/KathirvelChandrasekaran/grpc-poc/ride";
+
+message RideData {
+  string key = 1;
+  string fare_amount = 2;
+  string pickup_datetime = 3;
+  string pickup_longitude = 4;
+  string pickup_latitude = 5;
+  string dropoff_longitude = 6;
+  string dropoff_latitude = 7;
+  string passenger_count = 8;
+}
+
+message CreateRideRequest {
+  repeated RideData ride_data = 1;
+}
+
+message CreateRideResponse {
+  repeated RideData created_rides = 1;
+}
+
+service Ride {
+  rpc Create(CreateRideRequest) returns (CreateRideResponse);
+}
