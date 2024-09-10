@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	ride "github.com/KathirvelChandrasekaran/grpc_poc/ride_data"
 	"google.golang.org/grpc"
-	ride "grpc_poc/ride_data"
 	"io"
 	"log"
 	"net"
