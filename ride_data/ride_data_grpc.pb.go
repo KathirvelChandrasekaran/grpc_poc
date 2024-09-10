@@ -25,8 +25,11 @@ const (
 // RideClient is the client API for Ride service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Define the Ride service with a server-streaming method
 type RideClient interface {
-	Create(ctx context.Context, in *CreateRideRequest, opts ...grpc.CallOption) (*CreateRideResponse, error)
+	// The Create method streams chunks of RideData arrays to the client
+	Create(ctx context.Context, in *CreateRideRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CreateRideResponse], error)
 }
 
 type rideClient struct {
@@ -37,21 +40,33 @@ func NewRideClient(cc grpc.ClientConnInterface) RideClient {
 	return &rideClient{cc}
 }
 
-func (c *rideClient) Create(ctx context.Context, in *CreateRideRequest, opts ...grpc.CallOption) (*CreateRideResponse, error) {
+func (c *rideClient) Create(ctx context.Context, in *CreateRideRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CreateRideResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateRideResponse)
-	err := c.cc.Invoke(ctx, Ride_Create_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Ride_ServiceDesc.Streams[0], Ride_Create_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[CreateRideRequest, CreateRideResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Ride_CreateClient = grpc.ServerStreamingClient[CreateRideResponse]
 
 // RideServer is the server API for Ride service.
 // All implementations must embed UnimplementedRideServer
 // for forward compatibility.
+//
+// Define the Ride service with a server-streaming method
 type RideServer interface {
-	Create(context.Context, *CreateRideRequest) (*CreateRideResponse, error)
+	// The Create method streams chunks of RideData arrays to the client
+	Create(*CreateRideRequest, grpc.ServerStreamingServer[CreateRideResponse]) error
 	mustEmbedUnimplementedRideServer()
 }
 
@@ -62,8 +77,8 @@ type RideServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRideServer struct{}
 
-func (UnimplementedRideServer) Create(context.Context, *CreateRideRequest) (*CreateRideResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
+func (UnimplementedRideServer) Create(*CreateRideRequest, grpc.ServerStreamingServer[CreateRideResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
 func (UnimplementedRideServer) mustEmbedUnimplementedRideServer() {}
 func (UnimplementedRideServer) testEmbeddedByValue()              {}
@@ -86,23 +101,16 @@ func RegisterRideServer(s grpc.ServiceRegistrar, srv RideServer) {
 	s.RegisterService(&Ride_ServiceDesc, srv)
 }
 
-func _Ride_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateRideRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _Ride_Create_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(CreateRideRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(RideServer).Create(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Ride_Create_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RideServer).Create(ctx, req.(*CreateRideRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(RideServer).Create(m, &grpc.GenericServerStream[CreateRideRequest, CreateRideResponse]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Ride_CreateServer = grpc.ServerStreamingServer[CreateRideResponse]
 
 // Ride_ServiceDesc is the grpc.ServiceDesc for Ride service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -110,12 +118,13 @@ func _Ride_Create_Handler(srv interface{}, ctx context.Context, dec func(interfa
 var Ride_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "Ride",
 	HandlerType: (*RideServer)(nil),
-	Methods: []grpc.MethodDesc{
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "Create",
-			Handler:    _Ride_Create_Handler,
+			StreamName:    "Create",
+			Handler:       _Ride_Create_Handler,
+			ServerStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "ride_data.proto",
 }

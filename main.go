@@ -1,20 +1,14 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
+	"fmt"
 	ride "github.com/KathirvelChandrasekaran/grpc_poc/ride_data"
 	"google.golang.org/grpc"
-	"io"
 	"log"
 	"net"
 	"os"
-	"time"
 )
-
-type myRiderServer struct {
-	ride.UnimplementedRideServer
-}
 
 type RideDataJSON struct {
 	Key              string `json:"key"`
@@ -27,79 +21,82 @@ type RideDataJSON struct {
 	PassengerCount   string `json:"passenger_count"`
 }
 
-func (s myRiderServer) Create(ctx context.Context, req *ride.CreateRideRequest) (*ride.CreateRideResponse, error) {
-	startTime := time.Now()
-	file, err := os.Open("60MB.json")
-	if err != nil {
-		log.Fatalf("Failed to open JSON file: %v", err)
-		return nil, err
+// RideServer struct implementing the Ride service
+type RideServer struct {
+	ride.UnimplementedRideServer
+}
+
+// mapJSONToRideData maps a RideDataJSON to the gRPC RideData message
+func mapJSONToRideData(jsonData *RideDataJSON) *ride.RideData {
+	return &ride.RideData{
+		Key:              jsonData.Key,
+		FareAmount:       jsonData.FareAmount,
+		PickupDatetime:   jsonData.PickupDatetime,
+		PickupLongitude:  jsonData.PickupLongitude,
+		PickupLatitude:   jsonData.PickupLatitude,
+		DropoffLongitude: jsonData.DropoffLongitude,
+		DropoffLatitude:  jsonData.DropoffLatitude,
+		PassengerCount:   jsonData.PassengerCount,
 	}
-	log.Print("File open is done")
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-			log.Fatalf("Failed to close file: %v", err)
+}
+
+func (s *RideServer) Create(req *ride.CreateRideRequest, stream ride.Ride_CreateServer) error {
+	jsonData, err := os.ReadFile("300MB.json")
+	if err != nil {
+		panic(err)
+	}
+
+	// Unmarshal the JSON data into a slice of RideDataJSON structs
+	var rides []RideDataJSON
+	err = json.Unmarshal(jsonData, &rides)
+	if err != nil {
+		panic(err)
+	}
+
+	// Divide the rides into four chunks
+	chunkSize := len(rides) / 4
+	chunks := make([][]RideDataJSON, 0, chunkSize)
+
+	for i := 0; i < len(rides); i += chunkSize {
+		end := i + chunkSize
+		if end > len(rides) {
+			end = len(rides)
 		}
-	}(file)
-	decoder := json.NewDecoder(file)
-
-	// Expect an array at the beginning of the JSON
-	_, err = decoder.Token() // Advance past the opening '['
-	if err != nil {
-		log.Fatalf("Failed to read opening array token: %v", err)
-		return nil, err
+		chunks = append(chunks, rides[i:end])
 	}
 
-	var rideData []*ride.RideData
-	for decoder.More() {
-		var data RideDataJSON
-		// Decode each object in the array
-		if err := decoder.Decode(&data); err == io.EOF {
-			break
-		} else if err != nil {
-			log.Fatalf("Failed to decode JSON: %v", err)
-			return nil, err
+	// Print the chunks
+	for i, chunk := range chunks {
+		fmt.Printf("Chunk %d:\n Total Count - %d \n", i+1, len(chunk))
+		rides := make([]*ride.RideData, 0, chunkSize)
+		for _, ride := range chunk {
+			rides = append(rides, mapJSONToRideData(&ride))
 		}
-
-		// Append the unmarshaled data
-		rideData = append(rideData, &ride.RideData{
-			Key:              data.Key,
-			FareAmount:       data.FareAmount,
-			PickupDatetime:   data.PickupDatetime,
-			PickupLongitude:  data.PickupLongitude,
-			PickupLatitude:   data.PickupLatitude,
-			DropoffLongitude: data.DropoffLongitude,
-			DropoffLatitude:  data.DropoffLatitude,
-			PassengerCount:   data.PassengerCount,
-		})
+		chunk := &ride.CreateRideResponse{
+			CreatedRides: rides,
+		}
+		if err := stream.Send(chunk); err != nil {
+			log.Printf("Failed to send chunk: %v", err)
+			return err
+		}
 	}
-
-	// Read the closing ']' for the array
-	_, err = decoder.Token()
-	if err != nil {
-		log.Fatalf("Failed to read closing array token: %v", err)
-		return nil, err
-	}
-	log.Printf("Server: Time taken to process and send data: %v", time.Since(startTime))
-	return &ride.CreateRideResponse{CreatedRides: rideData}, nil
+	return nil
 }
 
 func main() {
+	// Create a TCP listener on port 8080
 	lis, err := net.Listen("tcp", ":8080")
 	if err != nil {
-		log.Fatalf("cannot create listener: %s", err)
+		log.Fatalf("Failed to listen on port 8080: %v", err)
 	}
 
-	// Set custom message size limit
-	serverRegistrar := grpc.NewServer(
-		grpc.MaxRecvMsgSize(100*1024*1024), // 50MB for receiving messages
-		grpc.MaxSendMsgSize(100*1024*1024), // 50MB for sending messages
-	)
-	service := &myRiderServer{}
-	ride.RegisterRideServer(serverRegistrar, service)
+	// Set up the gRPC server
+	server := grpc.NewServer()
+	ride.RegisterRideServer(server, &RideServer{})
 
-	err = serverRegistrar.Serve(lis)
-	if err != nil {
-		log.Fatalf("impossible to serve: %s", err)
+	// Start the gRPC server
+	log.Println("Server is running on port 8080")
+	if err := server.Serve(lis); err != nil {
+		log.Fatalf("Failed to start gRPC server: %v", err)
 	}
 }

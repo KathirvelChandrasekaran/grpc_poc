@@ -1,6 +1,7 @@
 syntax = "proto3";
 option go_package = "github.com/KathirvelChandrasekaran/grpc-poc";
 
+// Represents an individual ride data record
 message RideData {
   string key = 1;
   string fare_amount = 2;
@@ -12,14 +13,16 @@ message RideData {
   string passenger_count = 8;
 }
 
-message CreateRideRequest {
-  repeated RideData ride_data = 1;
-}
-
+// Represents a chunk of ride data (an array of RideData objects)
 message CreateRideResponse {
   repeated RideData created_rides = 1;
 }
 
+// Define the Ride service with a server-streaming method
 service Ride {
-  rpc Create(CreateRideRequest) returns (CreateRideResponse);
+  // The Create method streams chunks of RideData arrays to the client
+  rpc Create (CreateRideRequest) returns (stream CreateRideResponse);
 }
+
+// CreateRideRequest can be used to request ride data (empty here if not needed)
+message CreateRideRequest {}
