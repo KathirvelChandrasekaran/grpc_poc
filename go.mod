@@ -1,4 +1,4 @@
-module grpc_poc
+module github.com/KathirvelChandrasekaran/grpc_poc
 
 go 1.22
 
