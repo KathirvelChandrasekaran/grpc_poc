@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 type myRiderServer struct {
@@ -27,13 +28,19 @@ type RideDataJSON struct {
 }
 
 func (s myRiderServer) Create(ctx context.Context, req *ride.CreateRideRequest) (*ride.CreateRideResponse, error) {
-	file, err := os.Open("30MB.json")
+	startTime := time.Now()
+	file, err := os.Open("60MB.json")
 	if err != nil {
 		log.Fatalf("Failed to open JSON file: %v", err)
 		return nil, err
 	}
-	defer file.Close()
-
+	log.Print("File open is done")
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Fatalf("Failed to close file: %v", err)
+		}
+	}(file)
 	decoder := json.NewDecoder(file)
 
 	// Expect an array at the beginning of the JSON
@@ -73,7 +80,7 @@ func (s myRiderServer) Create(ctx context.Context, req *ride.CreateRideRequest) 
 		log.Fatalf("Failed to read closing array token: %v", err)
 		return nil, err
 	}
-
+	log.Printf("Server: Time taken to process and send data: %v", time.Since(startTime))
 	return &ride.CreateRideResponse{CreatedRides: rideData}, nil
 }
 
@@ -85,8 +92,8 @@ func main() {
 
 	// Set custom message size limit
 	serverRegistrar := grpc.NewServer(
-		grpc.MaxRecvMsgSize(50*1024*1024), // 50MB for receiving messages
-		grpc.MaxSendMsgSize(50*1024*1024), // 50MB for sending messages
+		grpc.MaxRecvMsgSize(100*1024*1024), // 50MB for receiving messages
+		grpc.MaxSendMsgSize(100*1024*1024), // 50MB for sending messages
 	)
 	service := &myRiderServer{}
 	ride.RegisterRideServer(serverRegistrar, service)

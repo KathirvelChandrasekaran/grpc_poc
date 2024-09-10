@@ -4,7 +4,7 @@
 // - protoc             v5.28.0
 // source: ride_data.proto
 
-package ride
+package grpc_poc
 
 import (
 	context "context"

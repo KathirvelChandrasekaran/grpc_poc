@@ -1,5 +1,5 @@
 syntax = "proto3";
-option go_package = "github.com/KathirvelChandrasekaran/grpc-poc/ride";
+option go_package = "github.com/KathirvelChandrasekaran/grpc-poc";
 
 message RideData {
   string key = 1;
